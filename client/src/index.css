@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes ink-stamp {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-ink-stamp {
+  animation: ink-stamp 0.2s ease-out forwards;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
@@ -43,7 +62,7 @@
   --chart-3: 210 65% 38%;
   --chart-4: 280 60% 42%;
   --chart-5: 140 55% 35%;
-  --font-sans: Open Sans, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: .5rem;
