@@ -1,5 +1,3 @@
-import { standardResolutions, bossResolutions } from "@/data/resolutions";
-
 export interface BingoSquare {
   text: string;
   isBoss: boolean;
@@ -11,14 +9,22 @@ export interface BoardState {
   createdAt: string;
 }
 
-export interface ExportData {
-  version: string;
-  createdAt: string;
-  squares: BingoSquare[];
+export interface UserLists {
+  standard: string[];
+  boss: string[];
 }
 
-const STORAGE_KEY = "resobingo-board-2026";
-const APP_VERSION = "1.0.0";
+export interface ExportDataV2 {
+  version: number;
+  createdAt: string;
+  squares: BingoSquare[];
+  userLists: UserLists;
+}
+
+const STORAGE_KEY_BOARD = "resobingo-board-2026";
+const STORAGE_KEY_USER_STANDARD = "resobingo-user-standard";
+const STORAGE_KEY_USER_BOSS = "resobingo-user-boss";
+const EXPORT_VERSION = 2;
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -29,30 +35,97 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled;
 }
 
-export function validateResolutionLists(): { valid: boolean; error?: string } {
-  if (standardResolutions.length < 24) {
-    return {
-      valid: false,
-      error: `Not enough standard resolutions. Need at least 24, but only have ${standardResolutions.length}.`
-    };
-  }
-  if (bossResolutions.length < 1) {
-    return {
-      valid: false,
-      error: "No boss resolutions available. Need at least 1."
-    };
-  }
-  return { valid: true };
+export function parseResolutionList(text: string): string[] {
+  return text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
 }
 
-export function generateNewBoard(): BoardState {
-  const validation = validateResolutionLists();
+export function getUniqueItems(items: string[]): string[] {
+  return Array.from(new Set(items));
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  standardCount?: number;
+  bossCount?: number;
+}
+
+export function validateUserLists(standard: string[], boss: string[]): ValidationResult {
+  const uniqueStandard = getUniqueItems(standard);
+  const uniqueBoss = getUniqueItems(boss);
+
+  if (uniqueBoss.length < 1) {
+    return {
+      valid: false,
+      error: "Need at least 1 Boss resolution.",
+      standardCount: uniqueStandard.length,
+      bossCount: 0
+    };
+  }
+
+  if (uniqueStandard.length < 24) {
+    return {
+      valid: false,
+      error: `Need at least 24 unique standard resolutions. You have ${uniqueStandard.length}.`,
+      standardCount: uniqueStandard.length,
+      bossCount: uniqueBoss.length
+    };
+  }
+
+  return {
+    valid: true,
+    standardCount: uniqueStandard.length,
+    bossCount: uniqueBoss.length
+  };
+}
+
+export function saveUserLists(standard: string[], boss: string[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_USER_STANDARD, JSON.stringify(standard));
+    localStorage.setItem(STORAGE_KEY_USER_BOSS, JSON.stringify(boss));
+  } catch (e) {
+    console.error("Failed to save user lists:", e);
+  }
+}
+
+export function loadUserLists(): UserLists | null {
+  try {
+    const standardJson = localStorage.getItem(STORAGE_KEY_USER_STANDARD);
+    const bossJson = localStorage.getItem(STORAGE_KEY_USER_BOSS);
+
+    if (standardJson && bossJson) {
+      return {
+        standard: JSON.parse(standardJson),
+        boss: JSON.parse(bossJson)
+      };
+    }
+  } catch (e) {
+    console.error("Failed to load user lists:", e);
+  }
+  return null;
+}
+
+export function generateBoardFromLists(standard: string[], boss: string[]): BoardState {
+  const uniqueStandard = getUniqueItems(standard);
+  const uniqueBoss = getUniqueItems(boss);
+
+  const validation = validateUserLists(uniqueStandard, uniqueBoss);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  const shuffledStandard = shuffleArray(standardResolutions).slice(0, 24);
-  const randomBoss = shuffleArray(bossResolutions)[0];
+  const randomBoss = shuffleArray(uniqueBoss)[0];
+
+  const standardWithoutBoss = uniqueStandard.filter(item => item !== randomBoss);
+
+  if (standardWithoutBoss.length < 24) {
+    throw new Error("Not enough unique standard resolutions after excluding boss. Need at least 24 items that don't overlap with your boss resolution.");
+  }
+
+  const shuffledStandard = shuffleArray(standardWithoutBoss).slice(0, 24);
 
   const squares: BingoSquare[] = [];
   let standardIndex = 0;
@@ -80,9 +153,23 @@ export function generateNewBoard(): BoardState {
   };
 }
 
+export function regenerateBoardFromSavedLists(): BoardState | null {
+  const lists = loadUserLists();
+  if (!lists) {
+    return null;
+  }
+
+  try {
+    return generateBoardFromLists(lists.standard, lists.boss);
+  } catch (e) {
+    console.error("Failed to regenerate board:", e);
+    return null;
+  }
+}
+
 export function saveBoard(board: BoardState): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
+    localStorage.setItem(STORAGE_KEY_BOARD, JSON.stringify(board));
   } catch (e) {
     console.error("Failed to save board:", e);
   }
@@ -90,7 +177,7 @@ export function saveBoard(board: BoardState): void {
 
 export function loadBoard(): BoardState | null {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY_BOARD);
     if (saved) {
       return JSON.parse(saved);
     }
@@ -103,6 +190,13 @@ export function loadBoard(): BoardState | null {
 export function toggleSquare(board: BoardState, index: number): BoardState {
   const newSquares = board.squares.map((square, i) =>
     i === index ? { ...square, marked: !square.marked } : square
+  );
+  return { ...board, squares: newSquares };
+}
+
+export function updateSquareText(board: BoardState, index: number, newText: string): BoardState {
+  const newSquares = board.squares.map((square, i) =>
+    i === index ? { ...square, text: newText } : square
   );
   return { ...board, squares: newSquares };
 }
@@ -133,11 +227,13 @@ export function checkBingo(squares: BingoSquare[]): boolean {
   );
 }
 
-export function exportBoardData(board: BoardState): ExportData {
+export function exportBoardData(board: BoardState): ExportDataV2 {
+  const userLists = loadUserLists() || { standard: [], boss: [] };
   return {
-    version: APP_VERSION,
+    version: EXPORT_VERSION,
     createdAt: board.createdAt,
-    squares: board.squares
+    squares: board.squares,
+    userLists
   };
 }
 
@@ -146,7 +242,7 @@ export function downloadExportData(board: BoardState): void {
   const jsonString = JSON.stringify(exportData, null, 2);
   const blob = new Blob([jsonString], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-  
+
   const link = document.createElement("a");
   link.href = url;
   link.download = `resobingo-backup-${new Date().toISOString().split("T")[0]}.json`;
@@ -159,7 +255,10 @@ export function downloadExportData(board: BoardState): void {
 export interface ImportValidationResult {
   valid: boolean;
   error?: string;
-  data?: BoardState;
+  data?: {
+    board: BoardState;
+    userLists?: UserLists;
+  };
 }
 
 export function validateImportData(jsonString: string): ImportValidationResult {
@@ -170,8 +269,8 @@ export function validateImportData(jsonString: string): ImportValidationResult {
       return { valid: false, error: "Invalid JSON format: expected an object" };
     }
 
-    if (typeof parsed.version !== "string") {
-      return { valid: false, error: "Missing or invalid 'version' field" };
+    if (parsed.version === undefined) {
+      return { valid: false, error: "Missing 'version' field" };
     }
 
     if (typeof parsed.createdAt !== "string") {
@@ -211,9 +310,30 @@ export function validateImportData(jsonString: string): ImportValidationResult {
       createdAt: parsed.createdAt
     };
 
-    return { valid: true, data: boardState };
+    let userLists: UserLists | undefined;
+    if (parsed.userLists && typeof parsed.userLists === "object") {
+      if (Array.isArray(parsed.userLists.standard) && Array.isArray(parsed.userLists.boss)) {
+        const validStandard = parsed.userLists.standard.every((s: unknown) => typeof s === "string");
+        const validBoss = parsed.userLists.boss.every((s: unknown) => typeof s === "string");
+        if (validStandard && validBoss) {
+          userLists = {
+            standard: parsed.userLists.standard,
+            boss: parsed.userLists.boss
+          };
+        }
+      }
+    }
+
+    return { valid: true, data: { board: boardState, userLists } };
   } catch (e) {
     return { valid: false, error: `Failed to parse JSON: ${(e as Error).message}` };
+  }
+}
+
+export function applyImportData(data: { board: BoardState; userLists?: UserLists }): void {
+  saveBoard(data.board);
+  if (data.userLists) {
+    saveUserLists(data.userLists.standard, data.userLists.boss);
   }
 }
 
@@ -226,4 +346,12 @@ export function clearResoBingoData(): void {
     }
   }
   keysToRemove.forEach(key => localStorage.removeItem(key));
+}
+
+export function hasExistingBoard(): boolean {
+  return loadBoard() !== null;
+}
+
+export function hasUserLists(): boolean {
+  return loadUserLists() !== null;
 }

@@ -1,32 +1,37 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { BingoGrid } from "@/components/BingoGrid";
 import { Button } from "@/components/ui/button";
 import {
   type BoardState,
-  generateNewBoard,
   saveBoard,
   loadBoard,
   toggleSquare,
+  updateSquareText,
   resetProgress,
-  validateResolutionLists,
-  checkBingo
+  checkBingo,
+  hasExistingBoard,
+  regenerateBoardFromSavedLists,
+  hasUserLists
 } from "@/lib/boardUtils";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCw, Sparkles, RotateCcw, Settings } from "lucide-react";
 import { Link } from "wouter";
 import confetti from "canvas-confetti";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
+  const [, setLocation] = useLocation();
   const [board, setBoard] = useState<BoardState | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [hasBingo, setHasBingo] = useState(false);
   const [showBingoModal, setShowBingoModal] = useState(false);
   const [hasShownBingo, setHasShownBingo] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const validation = validateResolutionLists();
-    if (!validation.valid) {
-      setError(validation.error || "Invalid resolution lists");
+    if (!hasExistingBoard()) {
+      setLocation("/create");
       return;
     }
 
@@ -37,12 +42,9 @@ export default function Home() {
         setHasBingo(true);
         setHasShownBingo(true);
       }
-    } else {
-      const newBoard = generateNewBoard();
-      setBoard(newBoard);
-      saveBoard(newBoard);
     }
-  }, []);
+    setIsLoading(false);
+  }, [setLocation]);
 
   const handleToggleSquare = useCallback((index: number) => {
     if (!board) return;
@@ -65,18 +67,47 @@ export default function Home() {
     }
   }, [board, hasShownBingo]);
 
+  const handleEditSquare = useCallback((index: number, newText: string) => {
+    if (!board) return;
+
+    const newBoard = updateSquareText(board, index, newText);
+    setBoard(newBoard);
+    saveBoard(newBoard);
+
+    toast({
+      title: "Resolution Updated",
+      description: "Your change has been saved."
+    });
+  }, [board, toast]);
+
   const handleNewCard = useCallback(() => {
-    try {
-      const newBoard = generateNewBoard();
-      setBoard(newBoard);
-      saveBoard(newBoard);
-      setHasBingo(false);
-      setHasShownBingo(false);
-      setShowBingoModal(false);
-    } catch (e) {
-      setError((e as Error).message);
+    if (!hasUserLists()) {
+      setLocation("/create");
+      return;
     }
-  }, []);
+
+    const newBoard = regenerateBoardFromSavedLists();
+    if (!newBoard) {
+      toast({
+        title: "Cannot Generate Card",
+        description: "Please update your resolution lists first.",
+        variant: "destructive"
+      });
+      setLocation("/create");
+      return;
+    }
+
+    setBoard(newBoard);
+    saveBoard(newBoard);
+    setHasBingo(false);
+    setHasShownBingo(false);
+    setShowBingoModal(false);
+
+    toast({
+      title: "New Card Generated",
+      description: "Your resolutions have been shuffled!"
+    });
+  }, [setLocation, toast]);
 
   const handleResetProgress = useCallback(() => {
     if (!board) return;
@@ -86,36 +117,23 @@ export default function Home() {
     setHasBingo(false);
     setHasShownBingo(false);
     setShowBingoModal(false);
-  }, [board]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6">
-            <div className="text-center space-y-4">
-              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-                <span className="text-2xl text-destructive">X</span>
-              </div>
-              <h2 className="text-xl font-bold text-foreground">Configuration Error</h2>
-              <p className="text-muted-foreground text-sm">{error}</p>
-              <Button onClick={handleNewCard} data-testid="button-retry">
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Retry
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+    toast({
+      title: "Progress Reset",
+      description: "All marks have been cleared."
+    });
+  }, [board, toast]);
 
-  if (!board) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
+  }
+
+  if (!board) {
+    return null;
   }
 
   return (
@@ -144,7 +162,11 @@ export default function Home() {
 
       <main className="flex-1 px-4 pb-4 flex flex-col">
         <div className="flex-1 flex items-center justify-center">
-          <BingoGrid board={board} onToggleSquare={handleToggleSquare} />
+          <BingoGrid
+            board={board}
+            onToggleSquare={handleToggleSquare}
+            onEditSquare={handleEditSquare}
+          />
         </div>
 
         <div className="mt-6 flex gap-2 justify-center">

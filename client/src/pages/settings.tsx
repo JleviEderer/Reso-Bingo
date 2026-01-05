@@ -6,13 +6,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   loadBoard,
   saveBoard,
-  generateNewBoard,
   resetProgress,
   downloadExportData,
   validateImportData,
-  clearResoBingoData
+  applyImportData,
+  clearResoBingoData,
+  regenerateBoardFromSavedLists
 } from "@/lib/boardUtils";
-import { ArrowLeft, Download, Upload, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Upload, RotateCcw, Trash2, Sparkles } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -66,7 +67,7 @@ export default function Settings() {
         return;
       }
 
-      saveBoard(result.data);
+      applyImportData(result.data);
       toast({
         title: "Import Successful",
         description: "Your board data has been restored. Return to the game to see your progress."
@@ -106,11 +107,13 @@ export default function Settings() {
 
   const handleResetAll = () => {
     clearResoBingoData();
-    const newBoard = generateNewBoard();
-    saveBoard(newBoard);
+    const newBoard = regenerateBoardFromSavedLists();
+    if (newBoard) {
+      saveBoard(newBoard);
+    }
     toast({
       title: "All Data Reset",
-      description: "A fresh board has been generated."
+      description: newBoard ? "A fresh board has been generated." : "All data cleared. Create a new card to start fresh."
     });
   };
 
@@ -128,6 +131,27 @@ export default function Settings() {
       </header>
 
       <main className="p-4 max-w-md mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Build My Card</CardTitle>
+            <CardDescription>
+              Edit your resolution lists and regenerate your card
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/create">
+              <Button
+                variant="default"
+                className="w-full justify-start gap-3"
+                data-testid="button-build-card"
+              >
+                <Sparkles className="w-4 h-4" />
+                Edit My Resolutions
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Data Management</CardTitle>
@@ -188,7 +212,7 @@ export default function Settings() {
                 Reset All Data
               </Button>
               <p className="text-xs text-muted-foreground pl-7">
-                Clears all saved data and generates a fresh board.
+                Clears all saved data and regenerates your board.
               </p>
             </div>
           </CardContent>
@@ -203,7 +227,7 @@ export default function Settings() {
               ResoBingo 2026 - Track your New Year's resolutions in a fun bingo format.
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              Version 1.0.0
+              Version 2.0.0
             </p>
           </CardContent>
         </Card>
