@@ -10,26 +10,31 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Pencil } from "lucide-react";
 
 interface BingoSquareProps {
   square: BingoSquareType;
   index: number;
   onToggle: () => void;
-  onEdit: (newText: string) => void;
+  onEdit: (newText: string, isBoss: boolean) => void;
 }
 
 export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProps) {
-  const isBoss = square.isBoss;
   const isMarked = square.marked;
   const [showEditModal, setShowEditModal] = useState(false);
   const [editText, setEditText] = useState(square.text);
+  const [editIsBoss, setEditIsBoss] = useState(square.isBoss);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
 
   useEffect(() => {
     setEditText(square.text);
-  }, [square.text]);
+    setEditIsBoss(square.isBoss);
+  }, [square.text, square.isBoss]);
+  
+  const isBoss = square.isBoss;
 
   const handleMouseDown = () => {
     isLongPress.current = false;
@@ -76,13 +81,14 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
   const handleSaveEdit = () => {
     const trimmed = editText.trim();
     if (trimmed.length > 0) {
-      onEdit(trimmed);
+      onEdit(trimmed, editIsBoss);
     }
     setShowEditModal(false);
   };
 
   const handleCancelEdit = () => {
     setEditText(square.text);
+    setEditIsBoss(square.isBoss);
     setShowEditModal(false);
   };
 
@@ -163,17 +169,36 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {isBoss ? "Edit Boss Resolution" : "Edit Resolution"}
-            </DialogTitle>
+            <DialogTitle>Edit Resolution</DialogTitle>
           </DialogHeader>
-          <Textarea
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            className="min-h-[100px]"
-            placeholder="Enter your resolution..."
-            data-testid="input-edit-resolution"
-          />
+          <div className="space-y-4">
+            <Textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="min-h-[100px]"
+              placeholder="Enter your resolution..."
+              data-testid="input-edit-resolution"
+            />
+            <div className="flex items-center justify-between gap-4 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="boss-toggle" className="text-sm font-medium">
+                  Boss Resolution
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {isBoss 
+                    ? "To change the boss, toggle another square on" 
+                    : "Toggling on will move boss from current location"}
+                </p>
+              </div>
+              <Switch
+                id="boss-toggle"
+                checked={editIsBoss}
+                onCheckedChange={setEditIsBoss}
+                disabled={isBoss}
+                data-testid="switch-boss-toggle"
+              />
+            </div>
+          </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={handleCancelEdit} data-testid="button-cancel-edit">
               Cancel
