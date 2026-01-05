@@ -139,7 +139,7 @@ export default function Settings() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/create">
+            <Link href="/create?from=settings">
               <Button
                 variant="default"
                 className="w-full justify-start gap-3"

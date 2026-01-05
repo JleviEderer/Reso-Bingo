@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,16 +13,30 @@ import {
   saveUserLists,
   generateBoardFromLists,
   saveBoard,
-  loadUserLists
+  loadUserLists,
+  hasExistingBoard
 } from "@/lib/boardUtils";
-import { Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function CreateCard() {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
   const { toast } = useToast();
 
   const existingLists = loadUserLists();
   const isEditing = existingLists !== null;
+  const hasBoard = hasExistingBoard();
+  const canGoBack = isEditing || hasBoard;
+
+  const fromSettings = searchString.includes("from=settings");
+
+  const handleBack = () => {
+    if (fromSettings) {
+      setLocation("/settings");
+    } else {
+      setLocation("/");
+    }
+  };
 
   const [standardText, setStandardText] = useState(
     existingLists ? existingLists.standard.join("\n") : ""
@@ -77,14 +91,31 @@ export default function CreateCard() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="py-6 px-4 text-center border-b border-border">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary" />
-          {isEditing ? "Edit Your Card" : "Build Your Card"}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {isEditing ? "Update your 2026 resolutions" : "Enter your 2026 resolutions"}
-        </p>
+      <header className="py-4 px-4 border-b border-border">
+        <div className="max-w-lg mx-auto">
+          <div className="relative flex items-center justify-center">
+            {canGoBack && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBack}
+                className="absolute left-0"
+                data-testid="button-back"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+            )}
+            <div className="text-center">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
+                <Sparkles className="w-6 h-6 text-primary" />
+                {isEditing ? "Edit Your Card" : "Build Your Card"}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isEditing ? "Update your 2026 resolutions" : "Enter your 2026 resolutions"}
+              </p>
+            </div>
+          </div>
+        </div>
       </header>
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full space-y-6">
