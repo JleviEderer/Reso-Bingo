@@ -16,7 +16,7 @@ import {
   loadUserLists,
   hasExistingBoard
 } from "@/lib/boardUtils";
-import { Sparkles, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Sparkles, CheckCircle2, AlertCircle, ArrowLeft, Save, RefreshCw } from "lucide-react";
 
 export default function CreateCard() {
   const [, setLocation] = useLocation();
@@ -87,6 +87,31 @@ export default function CreateCard() {
         variant: "destructive"
       });
     }
+  };
+
+  const handleSaveListsOnly = () => {
+    const standardItems = parseResolutionList(standardText);
+    const bossItems = parseResolutionList(bossText);
+    const uniqueStandard = getUniqueItems(standardItems);
+    const uniqueBoss = getUniqueItems(bossItems);
+
+    const check = validateUserLists(uniqueStandard, uniqueBoss);
+    if (!check.valid) {
+      toast({
+        title: "Cannot Save Lists",
+        description: check.error,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    saveUserLists(uniqueStandard, uniqueBoss);
+    toast({
+      title: "Lists Saved",
+      description: "Your resolution lists have been saved. Your current card is unchanged."
+    });
+
+    handleBack();
   };
 
   return (
@@ -188,7 +213,7 @@ export default function CreateCard() {
           {validation.valid ? (
             <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
               <CheckCircle2 className="w-4 h-4" />
-              <span>Ready to generate your card</span>
+              <span>Ready to save or generate</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -197,21 +222,40 @@ export default function CreateCard() {
             </div>
           )}
 
+          {isEditing && hasBoard && (
+            <Button
+              variant="outline"
+              className="w-full h-12"
+              disabled={!validation.valid}
+              onClick={handleSaveListsOnly}
+              data-testid="button-save-lists"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save Lists Only
+            </Button>
+          )}
+
           <Button
             className="w-full h-12"
             disabled={!validation.valid}
             onClick={handleGenerate}
             data-testid="button-generate"
           >
-            <Sparkles className="w-4 h-4 mr-2" />
-            {isEditing ? "Update & Regenerate Card" : "Generate My Card"}
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {isEditing ? "Save & Regenerate Card" : "Generate My Card"}
           </Button>
 
-          {isEditing && (
+          {isEditing && hasBoard && (
+            <p className="text-xs text-muted-foreground text-center">
+              "Save Lists Only" keeps your current card. "Save & Regenerate" creates a new shuffled card and clears progress.
+            </p>
+          )}
+
+          {canGoBack && (
             <Button
               variant="ghost"
               className="w-full"
-              onClick={() => setLocation("/")}
+              onClick={handleBack}
               data-testid="button-cancel"
             >
               Cancel
