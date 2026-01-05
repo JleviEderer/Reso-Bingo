@@ -4,7 +4,7 @@ import type { BoardState } from "@/lib/boardUtils";
 interface BingoGridProps {
   board: BoardState;
   onToggleSquare: (index: number) => void;
-  onEditSquare: (index: number, newText: string, isBoss: boolean) => void;
+  onEditSquare: (index: number, newText: string) => void;
 }
 
 export function BingoGrid({ board, onToggleSquare, onEditSquare }: BingoGridProps) {
@@ -19,7 +19,7 @@ export function BingoGrid({ board, onToggleSquare, onEditSquare }: BingoGridProp
           square={square}
           index={index}
           onToggle={() => onToggleSquare(index)}
-          onEdit={(newText, isBoss) => onEditSquare(index, newText, isBoss)}
+          onEdit={(newText) => onEditSquare(index, newText)}
         />
       ))}
     </div>

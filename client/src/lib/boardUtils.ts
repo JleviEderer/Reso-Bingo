@@ -179,19 +179,7 @@ export function loadBoard(): BoardState | null {
   try {
     const saved = localStorage.getItem(STORAGE_KEY_BOARD);
     if (saved) {
-      const board: BoardState = JSON.parse(saved);
-      const bossIndices = board.squares
-        .map((s, i) => s.isBoss ? i : -1)
-        .filter(i => i !== -1);
-      
-      if (bossIndices.length === 0) {
-        board.squares[12] = { ...board.squares[12], isBoss: true };
-      } else if (bossIndices.length > 1) {
-        board.squares = board.squares.map((s, i) => 
-          i === bossIndices[0] ? s : { ...s, isBoss: false }
-        );
-      }
-      return board;
+      return JSON.parse(saved);
     }
   } catch (e) {
     console.error("Failed to load board:", e);
@@ -210,30 +198,6 @@ export function updateSquareText(board: BoardState, index: number, newText: stri
   const newSquares = board.squares.map((square, i) =>
     i === index ? { ...square, text: newText } : square
   );
-  return { ...board, squares: newSquares };
-}
-
-export function updateSquare(board: BoardState, index: number, newText: string, isBoss: boolean): BoardState {
-  const bossIndices = board.squares
-    .map((s, i) => s.isBoss ? i : -1)
-    .filter(i => i !== -1);
-  const currentBossIndex = bossIndices[0] ?? -1;
-  
-  if (!isBoss && index === currentBossIndex) {
-    return { ...board, squares: board.squares.map((square, i) =>
-      i === index ? { ...square, text: newText } : square
-    )};
-  }
-  
-  const newSquares = board.squares.map((square, i) => {
-    if (i === index) {
-      return { ...square, text: newText, isBoss };
-    }
-    if (isBoss && i !== index) {
-      return { ...square, isBoss: false };
-    }
-    return square;
-  });
   return { ...board, squares: newSquares };
 }
 
@@ -337,9 +301,8 @@ export function validateImportData(jsonString: string): ImportValidationResult {
       }
     }
 
-    const bossCount = parsed.squares.filter((s: BingoSquare) => s.isBoss).length;
-    if (bossCount !== 1) {
-      return { valid: false, error: `Invalid board: must have exactly one Boss square, found ${bossCount}` };
+    if (parsed.squares[12].isBoss !== true) {
+      return { valid: false, error: "Invalid board: center square (index 12) must be a Boss square" };
     }
 
     const boardState: BoardState = {
