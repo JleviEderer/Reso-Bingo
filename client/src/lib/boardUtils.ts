@@ -11,7 +11,14 @@ export interface BoardState {
   createdAt: string;
 }
 
+export interface ExportData {
+  version: string;
+  createdAt: string;
+  squares: BingoSquare[];
+}
+
 const STORAGE_KEY = "resobingo-board-2026";
+const APP_VERSION = "1.0.0";
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array];
@@ -124,4 +131,99 @@ export function checkBingo(squares: BingoSquare[]): boolean {
   return winningLines.some(line =>
     line.every(index => squares[index].marked)
   );
+}
+
+export function exportBoardData(board: BoardState): ExportData {
+  return {
+    version: APP_VERSION,
+    createdAt: board.createdAt,
+    squares: board.squares
+  };
+}
+
+export function downloadExportData(board: BoardState): void {
+  const exportData = exportBoardData(board);
+  const jsonString = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([jsonString], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `resobingo-backup-${new Date().toISOString().split("T")[0]}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export interface ImportValidationResult {
+  valid: boolean;
+  error?: string;
+  data?: BoardState;
+}
+
+export function validateImportData(jsonString: string): ImportValidationResult {
+  try {
+    const parsed = JSON.parse(jsonString);
+
+    if (typeof parsed !== "object" || parsed === null) {
+      return { valid: false, error: "Invalid JSON format: expected an object" };
+    }
+
+    if (typeof parsed.version !== "string") {
+      return { valid: false, error: "Missing or invalid 'version' field" };
+    }
+
+    if (typeof parsed.createdAt !== "string") {
+      return { valid: false, error: "Missing or invalid 'createdAt' field" };
+    }
+
+    if (!Array.isArray(parsed.squares)) {
+      return { valid: false, error: "Missing or invalid 'squares' field: expected an array" };
+    }
+
+    if (parsed.squares.length !== 25) {
+      return { valid: false, error: `Invalid squares array: expected 25 items, got ${parsed.squares.length}` };
+    }
+
+    for (let i = 0; i < 25; i++) {
+      const square = parsed.squares[i];
+      if (typeof square !== "object" || square === null) {
+        return { valid: false, error: `Invalid square at index ${i}: expected an object` };
+      }
+      if (typeof square.text !== "string") {
+        return { valid: false, error: `Invalid square at index ${i}: missing or invalid 'text' field` };
+      }
+      if (typeof square.isBoss !== "boolean") {
+        return { valid: false, error: `Invalid square at index ${i}: missing or invalid 'isBoss' field` };
+      }
+      if (typeof square.marked !== "boolean") {
+        return { valid: false, error: `Invalid square at index ${i}: missing or invalid 'marked' field` };
+      }
+    }
+
+    if (parsed.squares[12].isBoss !== true) {
+      return { valid: false, error: "Invalid board: center square (index 12) must be a Boss square" };
+    }
+
+    const boardState: BoardState = {
+      squares: parsed.squares as BingoSquare[],
+      createdAt: parsed.createdAt
+    };
+
+    return { valid: true, data: boardState };
+  } catch (e) {
+    return { valid: false, error: `Failed to parse JSON: ${(e as Error).message}` };
+  }
+}
+
+export function clearResoBingoData(): void {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("resobingo")) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
 }

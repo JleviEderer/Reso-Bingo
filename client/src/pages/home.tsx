@@ -12,7 +12,8 @@ import {
   checkBingo
 } from "@/lib/boardUtils";
 import { Card, CardContent } from "@/components/ui/card";
-import { RefreshCw, Sparkles, RotateCcw } from "lucide-react";
+import { RefreshCw, Sparkles, RotateCcw, Settings } from "lucide-react";
+import { Link } from "wouter";
 import confetti from "canvas-confetti";
 
 export default function Home() {
@@ -119,17 +120,26 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="py-6 px-4 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-primary" />
-          ResoBingo 2026
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Your Resolution Tracker</p>
-        {hasBingo && (
-          <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-semibold">
-            BINGO!
+      <header className="py-6 px-4">
+        <div className="relative">
+          <Link href="/settings" className="absolute right-0 top-0">
+            <Button variant="ghost" size="icon" data-testid="button-settings">
+              <Settings className="w-5 h-5" />
+            </Button>
+          </Link>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
+              <Sparkles className="w-6 h-6 text-primary" />
+              ResoBingo 2026
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">Your Resolution Tracker</p>
+            {hasBingo && (
+              <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-semibold">
+                BINGO!
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </header>
 
       <main className="flex-1 px-4 pb-4 flex flex-col">
