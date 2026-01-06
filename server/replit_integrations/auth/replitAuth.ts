@@ -18,7 +18,7 @@ const getOidcConfig = memoize(
   { maxAge: 3600 * 1000 }
 );
 
-export function getSession() {
+export function getSession(): RequestHandler {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
@@ -26,8 +26,16 @@ export function getSession() {
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
+    errorLog: (error: Error) => {
+      console.error("[session-store] Database connection error:", error.message);
+    },
   });
-  return session({
+  
+  sessionStore.on("error", (error: Error) => {
+    console.error("[session-store] Session store error:", error.message);
+  });
+  
+  const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
     resave: false,
@@ -39,6 +47,23 @@ export function getSession() {
       maxAge: sessionTtl,
     },
   });
+  
+  // Wrap session middleware to catch database errors
+  return (req, res, next) => {
+    sessionMiddleware(req, res, (err) => {
+      if (err) {
+        console.error("[session] Session middleware error:", err.message);
+        // For DNS/connection errors, return a friendly message
+        if (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN" || err.code === "ECONNREFUSED") {
+          return res.status(503).json({ 
+            message: "Service temporarily unavailable. Please try again in a moment." 
+          });
+        }
+        return next(err);
+      }
+      next();
+    });
+  };
 }
 
 function updateUserSession(

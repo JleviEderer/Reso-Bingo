@@ -64,10 +64,23 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    
+    // Log the full error for debugging
+    console.error("[error-handler]", err);
+    
+    // Don't expose raw error messages to users - use friendly messages instead
+    let message = "Something went wrong. Please try again.";
+    if (status === 401) {
+      message = "Please sign in to continue.";
+    } else if (status === 403) {
+      message = "You don't have permission to do that.";
+    } else if (status === 404) {
+      message = "The requested resource was not found.";
+    } else if (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN") {
+      message = "Unable to connect to the server. Please check your internet connection.";
+    }
 
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
