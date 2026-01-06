@@ -61,15 +61,32 @@ async function upsertUser(claims: any) {
   });
 }
 
+function normalizeDomain(domain: string): string {
+  // Strip protocol and trailing slashes
+  let normalized = domain.trim();
+  normalized = normalized.replace(/^https?:\/\//, "");
+  normalized = normalized.replace(/\/+$/, "");
+  return normalized;
+}
+
 function getAuthDomain(req: any): string {
   // Use REPLIT_DEV_DOMAIN for dev environment, or first domain from REPLIT_DOMAINS
+  let domain: string;
   if (process.env.REPLIT_DEV_DOMAIN) {
-    return process.env.REPLIT_DEV_DOMAIN;
+    domain = process.env.REPLIT_DEV_DOMAIN;
+  } else if (process.env.REPLIT_DOMAINS) {
+    domain = process.env.REPLIT_DOMAINS.split(",")[0];
+  } else {
+    domain = req.hostname;
   }
-  if (process.env.REPLIT_DOMAINS) {
-    return process.env.REPLIT_DOMAINS.split(",")[0];
+  
+  const normalized = normalizeDomain(domain);
+  
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[auth] Using domain: ${normalized} (original: ${domain})`);
   }
-  return req.hostname;
+  
+  return normalized;
 }
 
 export async function setupAuth(app: Express) {
