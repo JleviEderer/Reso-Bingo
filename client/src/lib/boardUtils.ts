@@ -201,6 +201,13 @@ export function updateSquareText(board: BoardState, index: number, newText: stri
   return { ...board, squares: newSquares };
 }
 
+export function updateSquare(board: BoardState, index: number, updates: { text?: string; isBoss?: boolean }): BoardState {
+  const newSquares = board.squares.map((square, i) =>
+    i === index ? { ...square, ...updates } : square
+  );
+  return { ...board, squares: newSquares };
+}
+
 export function resetProgress(board: BoardState): BoardState {
   const newSquares = board.squares.map(square => ({ ...square, marked: false }));
   return { ...board, squares: newSquares };

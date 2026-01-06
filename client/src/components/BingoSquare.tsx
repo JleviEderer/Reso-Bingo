@@ -10,26 +10,30 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Pencil } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Pencil, Flame } from "lucide-react";
 
 interface BingoSquareProps {
   square: BingoSquareType;
   index: number;
   onToggle: () => void;
-  onEdit: (newText: string) => void;
+  onEdit: (newText: string, isBoss?: boolean) => void;
 }
 
 export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProps) {
-  const isBoss = square.isBoss;
   const isMarked = square.marked;
+  const isCenter = index === 12;
   const [showEditModal, setShowEditModal] = useState(false);
   const [editText, setEditText] = useState(square.text);
+  const [editIsBoss, setEditIsBoss] = useState(square.isBoss);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPress = useRef(false);
 
   useEffect(() => {
     setEditText(square.text);
-  }, [square.text]);
+    setEditIsBoss(square.isBoss);
+  }, [square.text, square.isBoss]);
 
   const handleMouseDown = () => {
     isLongPress.current = false;
@@ -76,13 +80,14 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
   const handleSaveEdit = () => {
     const trimmed = editText.trim();
     if (trimmed.length > 0) {
-      onEdit(trimmed);
+      onEdit(trimmed, editIsBoss);
     }
     setShowEditModal(false);
   };
 
   const handleCancelEdit = () => {
     setEditText(square.text);
+    setEditIsBoss(square.isBoss);
     setShowEditModal(false);
   };
 
@@ -92,7 +97,7 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
         <button
           role="button"
           aria-pressed={isMarked}
-          aria-label={isBoss ? `Boss challenge: ${square.text}` : square.text}
+          aria-label={square.isBoss ? `Boss challenge: ${square.text}` : square.text}
           onClick={handleClick}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
@@ -107,14 +112,14 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
             "transition-transform duration-100 active:scale-95",
             "bg-card border border-card-border",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            isBoss && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background"
+            square.isBoss && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background"
           )}
         >
           <span
             className={cn(
               "text-[10px] sm:text-xs font-medium leading-tight text-center",
               "z-10 px-0.5",
-              isBoss ? "font-bold text-amber-700 dark:text-amber-400" : "text-foreground"
+              square.isBoss ? "font-bold text-amber-700 dark:text-amber-400" : "text-foreground"
             )}
           >
             {square.text}
@@ -131,7 +136,7 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
                 className={cn(
                   "w-[85%] h-[85%] rounded-full",
                   "mix-blend-multiply dark:mix-blend-screen",
-                  isBoss
+                  square.isBoss
                     ? "bg-amber-500/50 dark:bg-amber-400/40"
                     : "bg-primary/50 dark:bg-primary/40"
                 )}
@@ -139,7 +144,7 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
             </div>
           )}
 
-          {isBoss && (
+          {square.isBoss && (
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center z-20">
               <span className="text-[8px] text-white font-bold">B</span>
             </div>
@@ -164,7 +169,7 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {isBoss ? "Edit Boss Resolution" : "Edit Resolution"}
+              {editIsBoss ? "Edit Boss Resolution" : "Edit Resolution"}
             </DialogTitle>
           </DialogHeader>
           <Textarea
@@ -174,6 +179,26 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
             placeholder="Enter your resolution..."
             data-testid="input-edit-resolution"
           />
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div className="flex items-center gap-2">
+              <Flame className={cn("w-4 h-4", editIsBoss ? "text-amber-500" : "text-muted-foreground")} />
+              <Label htmlFor="boss-toggle" className="text-sm">
+                Boss Challenge
+              </Label>
+            </div>
+            <Switch
+              id="boss-toggle"
+              checked={editIsBoss}
+              onCheckedChange={setEditIsBoss}
+              disabled={isCenter}
+              data-testid="switch-boss-toggle"
+            />
+          </div>
+          {isCenter && (
+            <p className="text-xs text-muted-foreground">
+              The center square must always be a Boss challenge.
+            </p>
+          )}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={handleCancelEdit} data-testid="button-cancel-edit">
               Cancel

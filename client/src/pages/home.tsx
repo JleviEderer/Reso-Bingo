@@ -7,7 +7,7 @@ import {
   saveBoard,
   loadBoard,
   toggleSquare,
-  updateSquareText,
+  updateSquare,
   resetProgress,
   checkBingo,
   hasExistingBoard,
@@ -67,10 +67,15 @@ export default function Home() {
     }
   }, [board, hasShownBingo]);
 
-  const handleEditSquare = useCallback((index: number, newText: string) => {
+  const handleEditSquare = useCallback((index: number, newText: string, isBoss?: boolean) => {
     if (!board) return;
 
-    const newBoard = updateSquareText(board, index, newText);
+    const updates: { text?: string; isBoss?: boolean } = { text: newText };
+    if (isBoss !== undefined) {
+      updates.isBoss = isBoss;
+    }
+
+    const newBoard = updateSquare(board, index, updates);
     setBoard(newBoard);
     saveBoard(newBoard);
 
