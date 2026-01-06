@@ -10,12 +10,10 @@ import {
   updateSquare,
   resetProgress,
   checkBingo,
-  hasExistingBoard,
-  regenerateBoardFromSavedLists,
-  hasUserLists
+  hasExistingBoard
 } from "@/lib/boardUtils";
 import { Card, CardContent } from "@/components/ui/card";
-import { RefreshCw, Sparkles, RotateCcw, Settings } from "lucide-react";
+import { Sparkles, RotateCcw, Settings } from "lucide-react";
 import { Link } from "wouter";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
@@ -85,35 +83,6 @@ export default function Home() {
     });
   }, [board, toast]);
 
-  const handleNewCard = useCallback(() => {
-    if (!hasUserLists()) {
-      setLocation("/create");
-      return;
-    }
-
-    const newBoard = regenerateBoardFromSavedLists();
-    if (!newBoard) {
-      toast({
-        title: "Cannot Generate Card",
-        description: "Please update your resolution lists first.",
-        variant: "destructive"
-      });
-      setLocation("/create");
-      return;
-    }
-
-    setBoard(newBoard);
-    saveBoard(newBoard);
-    setHasBingo(false);
-    setHasShownBingo(false);
-    setShowBingoModal(false);
-
-    toast({
-      title: "New Card Generated",
-      description: "Your resolutions have been shuffled!"
-    });
-  }, [setLocation, toast]);
-
   const handleResetProgress = useCallback(() => {
     if (!board) return;
     const resetBoard = resetProgress(board);
@@ -176,22 +145,13 @@ export default function Home() {
 
         <div className="mt-6 flex gap-2 justify-center">
           <Button
-            variant="secondary"
-            onClick={handleNewCard}
-            className="rounded-full px-6"
-            data-testid="button-new-card"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            New Card
-          </Button>
-          <Button
             variant="outline"
             onClick={handleResetProgress}
             className="rounded-full px-6"
             data-testid="button-reset"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
+            Reset Progress
           </Button>
         </div>
       </main>
