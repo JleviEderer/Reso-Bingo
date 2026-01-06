@@ -95,21 +95,28 @@ function normalizeDomain(domain: string): string {
 }
 
 function getAuthDomain(req: any): string {
-  // Use REPLIT_DEV_DOMAIN for dev environment, or first domain from REPLIT_DOMAINS
+  // In production, use the request hostname to ensure OAuth callback matches the actual domain
+  // In development, REPLIT_DEV_DOMAIN is the correct domain
   let domain: string;
-  if (process.env.REPLIT_DEV_DOMAIN) {
+  
+  const isProduction = process.env.NODE_ENV === "production";
+  const requestHost = req.hostname || req.headers?.host?.split(":")[0];
+  
+  if (isProduction && requestHost) {
+    // In production, trust the request hostname
+    domain = requestHost;
+  } else if (process.env.REPLIT_DEV_DOMAIN) {
+    // In development, use the dev domain
     domain = process.env.REPLIT_DEV_DOMAIN;
   } else if (process.env.REPLIT_DOMAINS) {
     domain = process.env.REPLIT_DOMAINS.split(",")[0];
   } else {
-    domain = req.hostname;
+    domain = requestHost || "localhost";
   }
   
   const normalized = normalizeDomain(domain);
   
-  if (process.env.NODE_ENV === "development") {
-    console.log(`[auth] Using domain: ${normalized} (original: ${domain})`);
-  }
+  console.log(`[auth] Using domain: ${normalized} (production: ${isProduction}, requestHost: ${requestHost})`);
   
   return normalized;
 }
