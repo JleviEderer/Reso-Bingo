@@ -48,16 +48,33 @@ export function getSession(): RequestHandler {
     },
   });
   
-  // Wrap session middleware to catch database errors
+  // Wrap session middleware to catch database errors gracefully
   return (req, res, next) => {
     sessionMiddleware(req, res, (err) => {
       if (err) {
         console.error("[session] Session middleware error:", err.message);
-        // For DNS/connection errors, return a friendly message
+        
+        // For database connection errors, check if this is a critical path
         if (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN" || err.code === "ECONNREFUSED") {
-          return res.status(503).json({ 
-            message: "Service temporarily unavailable. Please try again in a moment." 
-          });
+          const path = req.path || "";
+          
+          // For auth-related endpoints, fail with 503
+          if (path.startsWith("/api/login") || path.startsWith("/api/callback") || path.startsWith("/api/logout")) {
+            return res.status(503).json({ 
+              message: "Service temporarily unavailable. Please try again in a moment." 
+            });
+          }
+          
+          // For all API routes, fail with 503 since they require session
+          if (path.startsWith("/api/")) {
+            return res.status(503).json({ 
+              message: "Service temporarily unavailable. Please try again in a moment." 
+            });
+          }
+          
+          // For non-API routes (static pages), continue without session so the app loads
+          console.log(`[session] Continuing without session for static path: ${path}`);
+          return next();
         }
         return next(err);
       }
