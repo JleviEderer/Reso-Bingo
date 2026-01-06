@@ -113,16 +113,16 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
             "relative aspect-square rounded-lg overflow-visible select-none w-full",
             "flex items-center justify-center p-1",
             "transition-transform duration-100 active:scale-95",
-            "bg-card border border-card-border",
+            "bg-card border border-card-border shadow-sm",
             "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             square.isBoss && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background"
           )}
         >
           <span
             className={cn(
-              "text-[10px] sm:text-xs font-medium leading-tight text-center",
+              "text-[11px] sm:text-sm font-medium leading-tight text-center",
               "z-10 px-0.5",
-              square.isBoss ? "font-bold text-amber-700 dark:text-amber-400" : "text-foreground"
+              square.isBoss ? "font-semibold text-amber-700 dark:text-amber-400" : "text-foreground"
             )}
           >
             {square.text}

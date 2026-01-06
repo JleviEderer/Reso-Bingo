@@ -124,7 +124,7 @@ export default function Home() {
               <Sparkles className="w-6 h-6 text-primary" />
               ResoBingo 2026
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Your Resolution Tracker</p>
+            <p className="text-sm text-muted-foreground mt-1 tracking-wide">Your Resolution Tracker</p>
             {hasBingo && (
               <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-semibold">
                 BINGO!
