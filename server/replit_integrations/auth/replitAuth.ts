@@ -54,27 +54,15 @@ export function getSession(): RequestHandler {
       if (err) {
         console.error("[session] Session middleware error:", err.message);
         
-        // For database connection errors, check if this is a critical path
+        // For database connection errors, return 503 since this middleware only runs on /api routes
+        // Use originalUrl to get the full path including the /api prefix
         if (err.code === "ENOTFOUND" || err.code === "EAI_AGAIN" || err.code === "ECONNREFUSED") {
-          const path = req.path || "";
+          const fullPath = req.originalUrl || req.baseUrl + req.path || "";
+          console.log(`[session] Database connection error for path: ${fullPath}`);
           
-          // For auth-related endpoints, fail with 503
-          if (path.startsWith("/api/login") || path.startsWith("/api/callback") || path.startsWith("/api/logout")) {
-            return res.status(503).json({ 
-              message: "Service temporarily unavailable. Please try again in a moment." 
-            });
-          }
-          
-          // For all API routes, fail with 503 since they require session
-          if (path.startsWith("/api/")) {
-            return res.status(503).json({ 
-              message: "Service temporarily unavailable. Please try again in a moment." 
-            });
-          }
-          
-          // For non-API routes (static pages), continue without session so the app loads
-          console.log(`[session] Continuing without session for static path: ${path}`);
-          return next();
+          return res.status(503).json({ 
+            message: "Service temporarily unavailable. Please try again in a moment." 
+          });
         }
         return next(err);
       }
@@ -148,9 +136,12 @@ function getAuthDomain(req: any): string {
 
 export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
-  app.use(getSession());
-  app.use(passport.initialize());
-  app.use(passport.session());
+  
+  // Only apply session middleware to /api/ routes - not static files
+  // This prevents database connection errors from blocking the entire app
+  app.use("/api", getSession());
+  app.use("/api", passport.initialize());
+  app.use("/api", passport.session());
 
   const config = await getOidcConfig();
 
