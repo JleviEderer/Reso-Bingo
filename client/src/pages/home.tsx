@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { BingoGrid } from "@/components/BingoGrid";
 import { Button } from "@/components/ui/button";
 import {
   type BoardState,
-  saveBoard,
-  loadBoard,
+  type BingoSquare,
+  saveBoard as saveLocalBoard,
+  loadBoard as loadLocalBoard,
   toggleSquare,
   updateSquare,
   resetProgress,
@@ -13,10 +15,17 @@ import {
   hasExistingBoard
 } from "@/lib/boardUtils";
 import { Card, CardContent } from "@/components/ui/card";
-import { Sparkles, RotateCcw, Settings } from "lucide-react";
+import { Sparkles, RotateCcw, Settings, LogOut, Cloud, CloudOff } from "lucide-react";
 import { Link } from "wouter";
 import confetti from "canvas-confetti";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface CloudBoard {
+  squares: BingoSquare[];
+  createdAt: string;
+}
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -24,32 +33,78 @@ export default function Home() {
   const [hasBingo, setHasBingo] = useState(false);
   const [showBingoModal, setShowBingoModal] = useState(false);
   const [hasShownBingo, setHasShownBingo] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const { toast } = useToast();
+  const { user, logout, isLoggingOut } = useAuth();
+
+  const { data: cloudBoard, isLoading: isLoadingCloud } = useQuery<CloudBoard | null>({
+    queryKey: ["/api/board"],
+    retry: 1,
+  });
+
+  const saveBoardMutation = useMutation({
+    mutationFn: async (boardData: BoardState) => {
+      await apiRequest("POST", "/api/board", {
+        squares: boardData.squares,
+      });
+    },
+    onError: () => {
+      setIsOffline(true);
+    },
+    onSuccess: () => {
+      setIsOffline(false);
+    },
+  });
 
   useEffect(() => {
-    if (!hasExistingBoard()) {
-      setLocation("/create");
-      return;
-    }
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
-    const savedBoard = loadBoard();
-    if (savedBoard) {
-      setBoard(savedBoard);
-      if (checkBingo(savedBoard.squares)) {
+  useEffect(() => {
+    if (isLoadingCloud) return;
+
+    if (cloudBoard && cloudBoard.squares) {
+      const boardState: BoardState = {
+        squares: cloudBoard.squares,
+        createdAt: cloudBoard.createdAt,
+      };
+      setBoard(boardState);
+      saveLocalBoard(boardState);
+      if (checkBingo(boardState.squares)) {
         setHasBingo(true);
         setHasShownBingo(true);
       }
+    } else {
+      const localBoard = loadLocalBoard();
+      if (localBoard) {
+        setBoard(localBoard);
+        if (!isOffline) {
+          saveBoardMutation.mutate(localBoard);
+        }
+        if (checkBingo(localBoard.squares)) {
+          setHasBingo(true);
+          setHasShownBingo(true);
+        }
+      } else {
+        setLocation("/create");
+      }
     }
-    setIsLoading(false);
-  }, [setLocation]);
+  }, [cloudBoard, isLoadingCloud, setLocation, isOffline]);
 
   const handleToggleSquare = useCallback((index: number) => {
     if (!board) return;
 
     const newBoard = toggleSquare(board, index);
     setBoard(newBoard);
-    saveBoard(newBoard);
+    saveLocalBoard(newBoard);
+    saveBoardMutation.mutate(newBoard);
 
     const hasBingoNow = checkBingo(newBoard.squares);
     setHasBingo(hasBingoNow);
@@ -63,7 +118,7 @@ export default function Home() {
         origin: { y: 0.6 }
       });
     }
-  }, [board, hasShownBingo]);
+  }, [board, hasShownBingo, saveBoardMutation]);
 
   const handleEditSquare = useCallback((index: number, newText: string, isBoss?: boolean) => {
     if (!board) return;
@@ -75,19 +130,21 @@ export default function Home() {
 
     const newBoard = updateSquare(board, index, updates);
     setBoard(newBoard);
-    saveBoard(newBoard);
+    saveLocalBoard(newBoard);
+    saveBoardMutation.mutate(newBoard);
 
     toast({
       title: "Resolution Updated",
       description: "Your change has been saved."
     });
-  }, [board, toast]);
+  }, [board, toast, saveBoardMutation]);
 
   const handleResetProgress = useCallback(() => {
     if (!board) return;
     const resetBoard = resetProgress(board);
     setBoard(resetBoard);
-    saveBoard(resetBoard);
+    saveLocalBoard(resetBoard);
+    saveBoardMutation.mutate(resetBoard);
     setHasBingo(false);
     setHasShownBingo(false);
     setShowBingoModal(false);
@@ -96,12 +153,12 @@ export default function Home() {
       title: "Progress Reset",
       description: "All marks have been cleared."
     });
-  }, [board, toast]);
+  }, [board, toast, saveBoardMutation]);
 
-  if (isLoading) {
+  if (isLoadingCloud) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="animate-pulse text-muted-foreground">Loading your board...</div>
       </div>
     );
   }
@@ -114,17 +171,37 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="py-6 px-4">
         <div className="relative">
-          <Link href="/settings" className="absolute right-0 top-0">
-            <Button variant="ghost" size="icon" data-testid="button-settings">
-              <Settings className="w-5 h-5" />
+          <div className="absolute left-0 top-0 flex items-center gap-1">
+            {isOffline ? (
+              <CloudOff className="w-4 h-4 text-muted-foreground" />
+            ) : (
+              <Cloud className="w-4 h-4 text-green-500" />
+            )}
+          </div>
+          <div className="absolute right-0 top-0 flex items-center gap-1">
+            <Link href="/settings">
+              <Button variant="ghost" size="icon" data-testid="button-settings">
+                <Settings className="w-5 h-5" />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => logout()}
+              disabled={isLoggingOut}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-5 h-5" />
             </Button>
-          </Link>
-          <div className="text-center">
+          </div>
+          <div className="text-center pt-1">
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
               <Sparkles className="w-6 h-6 text-primary" />
               ResoBingo 2026
             </h1>
-            <p className="text-sm text-muted-foreground mt-1 tracking-wide">Your Resolution Tracker</p>
+            <p className="text-sm text-muted-foreground mt-1 tracking-wide">
+              {user?.firstName ? `${user.firstName}'s Resolutions` : "Your Resolution Tracker"}
+            </p>
             {hasBingo && (
               <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-semibold">
                 BINGO!

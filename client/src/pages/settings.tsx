@@ -1,8 +1,11 @@
 import { useRef } from "react";
 import { Link } from "wouter";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   loadBoard,
   saveBoard,
@@ -13,11 +16,21 @@ import {
   clearResoBingoData,
   regenerateBoardFromSavedLists
 } from "@/lib/boardUtils";
-import { ArrowLeft, Download, Upload, RotateCcw, Trash2, Sparkles } from "lucide-react";
+import { ArrowLeft, Download, Upload, RotateCcw, Trash2, Sparkles, LogOut, User } from "lucide-react";
 
 export default function Settings() {
   const { toast } = useToast();
+  const { user, logout, isLoggingOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const saveBoardMutation = useMutation({
+    mutationFn: async (boardData: { squares: any[] }) => {
+      await apiRequest("POST", "/api/board", { squares: boardData.squares });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/board"] });
+    },
+  });
 
   const handleExport = () => {
     const board = loadBoard();
@@ -49,12 +62,12 @@ export default function Settings() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const content = e.target?.result as string;
       const result = validateImportData(content);
 
@@ -68,6 +81,12 @@ export default function Settings() {
       }
 
       applyImportData(result.data);
+      
+      const board = loadBoard();
+      if (board) {
+        await saveBoardMutation.mutateAsync({ squares: board.squares });
+      }
+
       toast({
         title: "Import Successful",
         description: "Your board data has been restored. Return to the game to see your progress."
@@ -86,7 +105,7 @@ export default function Settings() {
     event.target.value = "";
   };
 
-  const handleResetProgress = () => {
+  const handleResetProgress = async () => {
     const board = loadBoard();
     if (!board) {
       toast({
@@ -99,17 +118,20 @@ export default function Settings() {
 
     const resetBoard = resetProgress(board);
     saveBoard(resetBoard);
+    await saveBoardMutation.mutateAsync({ squares: resetBoard.squares });
+    
     toast({
       title: "Progress Reset",
       description: "All marked squares have been cleared. Your board text is preserved."
     });
   };
 
-  const handleResetAll = () => {
+  const handleResetAll = async () => {
     clearResoBingoData();
     const newBoard = regenerateBoardFromSavedLists();
     if (newBoard) {
       saveBoard(newBoard);
+      await saveBoardMutation.mutateAsync({ squares: newBoard.squares });
     }
     toast({
       title: "All Data Reset",
@@ -131,6 +153,32 @@ export default function Settings() {
       </header>
 
       <main className="p-4 max-w-md mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Account
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {user && (
+              <div className="text-sm text-muted-foreground">
+                Signed in as <span className="text-foreground font-medium">{user.email || user.firstName || "User"}</span>
+              </div>
+            )}
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-3"
+              onClick={() => logout()}
+              disabled={isLoggingOut}
+              data-testid="button-logout"
+            >
+              <LogOut className="w-4 h-4" />
+              {isLoggingOut ? "Signing out..." : "Sign Out"}
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Build My Card</CardTitle>
@@ -193,10 +241,11 @@ export default function Settings() {
                 variant="secondary"
                 className="w-full justify-start gap-3"
                 onClick={handleResetProgress}
+                disabled={saveBoardMutation.isPending}
                 data-testid="button-reset-progress"
               >
                 <RotateCcw className="w-4 h-4" />
-                Reset Progress
+                {saveBoardMutation.isPending ? "Resetting..." : "Reset Progress"}
               </Button>
               <p className="text-xs text-muted-foreground pl-7">
                 Clears all marked squares but keeps your current board.
@@ -206,6 +255,7 @@ export default function Settings() {
                 variant="destructive"
                 className="w-full justify-start gap-3"
                 onClick={handleResetAll}
+                disabled={saveBoardMutation.isPending}
                 data-testid="button-reset-all"
               >
                 <Trash2 className="w-4 h-4" />
@@ -227,7 +277,7 @@ export default function Settings() {
               ResoBingo 2026 - Track your New Year's resolutions in a fun bingo format.
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              Version 2.0.0
+              Version 3.0.0 - Now with cloud sync!
             </p>
           </CardContent>
         </Card>

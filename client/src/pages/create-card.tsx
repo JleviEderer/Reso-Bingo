@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,23 +11,32 @@ import {
   parseResolutionList,
   getUniqueItems,
   validateUserLists,
-  saveUserLists,
+  saveUserLists as saveLocalUserLists,
   generateBoardFromLists,
-  saveBoard,
-  loadUserLists,
+  saveBoard as saveLocalBoard,
+  loadUserLists as loadLocalUserLists,
   hasExistingBoard
 } from "@/lib/boardUtils";
 import { Sparkles, CheckCircle2, AlertCircle, ArrowLeft, Save, RefreshCw } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface CloudLists {
+  standard: string[];
+  boss: string[];
+}
 
 export default function CreateCard() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const { toast } = useToast();
 
-  const existingLists = loadUserLists();
-  const isEditing = existingLists !== null;
+  const { data: cloudLists, isLoading: isLoadingLists } = useQuery<CloudLists>({
+    queryKey: ["/api/lists"],
+    retry: 1,
+  });
+
+  const localLists = loadLocalUserLists();
   const hasBoard = hasExistingBoard();
-  const canGoBack = isEditing || hasBoard;
 
   const fromSettings = searchString.includes("from=settings");
 
@@ -38,12 +48,43 @@ export default function CreateCard() {
     }
   };
 
-  const [standardText, setStandardText] = useState(
-    existingLists ? existingLists.standard.join("\n") : ""
-  );
-  const [bossText, setBossText] = useState(
-    existingLists ? existingLists.boss.join("\n") : ""
-  );
+  const [standardText, setStandardText] = useState("");
+  const [bossText, setBossText] = useState("");
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  useEffect(() => {
+    if (isLoadingLists || isInitialized) return;
+
+    if (cloudLists && (cloudLists.standard.length > 0 || cloudLists.boss.length > 0)) {
+      setStandardText(cloudLists.standard.join("\n"));
+      setBossText(cloudLists.boss.join("\n"));
+    } else if (localLists) {
+      setStandardText(localLists.standard.join("\n"));
+      setBossText(localLists.boss.join("\n"));
+    }
+    setIsInitialized(true);
+  }, [cloudLists, isLoadingLists, localLists, isInitialized]);
+
+  const isEditing = (cloudLists && (cloudLists.standard.length > 0 || cloudLists.boss.length > 0)) || localLists !== null;
+  const canGoBack = isEditing || hasBoard;
+
+  const saveListsMutation = useMutation({
+    mutationFn: async (lists: { standard: string[]; boss: string[] }) => {
+      await apiRequest("POST", "/api/lists", lists);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lists"] });
+    },
+  });
+
+  const saveBoardMutation = useMutation({
+    mutationFn: async (boardData: { squares: any[] }) => {
+      await apiRequest("POST", "/api/board", { squares: boardData.squares });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/board"] });
+    },
+  });
 
   const validation = useMemo(() => {
     const standardItems = parseResolutionList(standardText);
@@ -53,7 +94,7 @@ export default function CreateCard() {
     return validateUserLists(uniqueStandard, uniqueBoss);
   }, [standardText, bossText]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     const standardItems = parseResolutionList(standardText);
     const bossItems = parseResolutionList(bossText);
     const uniqueStandard = getUniqueItems(standardItems);
@@ -70,9 +111,12 @@ export default function CreateCard() {
     }
 
     try {
-      saveUserLists(uniqueStandard, uniqueBoss);
+      saveLocalUserLists(uniqueStandard, uniqueBoss);
       const board = generateBoardFromLists(uniqueStandard, uniqueBoss);
-      saveBoard(board);
+      saveLocalBoard(board);
+
+      await saveListsMutation.mutateAsync({ standard: uniqueStandard, boss: uniqueBoss });
+      await saveBoardMutation.mutateAsync({ squares: board.squares });
 
       toast({
         title: isEditing ? "Card Updated" : "Card Created",
@@ -89,7 +133,7 @@ export default function CreateCard() {
     }
   };
 
-  const handleSaveListsOnly = () => {
+  const handleSaveListsOnly = async () => {
     const standardItems = parseResolutionList(standardText);
     const bossItems = parseResolutionList(bossText);
     const uniqueStandard = getUniqueItems(standardItems);
@@ -105,14 +149,32 @@ export default function CreateCard() {
       return;
     }
 
-    saveUserLists(uniqueStandard, uniqueBoss);
-    toast({
-      title: "Lists Saved",
-      description: "Your resolution lists have been saved. Your current card is unchanged."
-    });
+    try {
+      saveLocalUserLists(uniqueStandard, uniqueBoss);
+      await saveListsMutation.mutateAsync({ standard: uniqueStandard, boss: uniqueBoss });
 
-    handleBack();
+      toast({
+        title: "Lists Saved",
+        description: "Your resolution lists have been saved. Your current card is unchanged."
+      });
+
+      handleBack();
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: (e as Error).message,
+        variant: "destructive"
+      });
+    }
   };
+
+  if (isLoadingLists) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -226,23 +288,23 @@ export default function CreateCard() {
             <Button
               variant="outline"
               className="w-full h-12"
-              disabled={!validation.valid}
+              disabled={!validation.valid || saveListsMutation.isPending}
               onClick={handleSaveListsOnly}
               data-testid="button-save-lists"
             >
               <Save className="w-4 h-4 mr-2" />
-              Save Lists Only
+              {saveListsMutation.isPending ? "Saving..." : "Save Lists Only"}
             </Button>
           )}
 
           <Button
             className="w-full h-12"
-            disabled={!validation.valid}
+            disabled={!validation.valid || saveListsMutation.isPending || saveBoardMutation.isPending}
             onClick={handleGenerate}
             data-testid="button-generate"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
-            {isEditing ? "Save & Regenerate Card" : "Generate My Card"}
+            {saveListsMutation.isPending || saveBoardMutation.isPending ? "Saving..." : (isEditing ? "Save & Regenerate Card" : "Generate My Card")}
           </Button>
 
           {isEditing && hasBoard && (
