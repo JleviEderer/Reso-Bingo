@@ -58,6 +58,9 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
+    if ('ontouchstart' in window) {
+      return;
+    }
     e.preventDefault();
     setShowEditModal(true);
   };
