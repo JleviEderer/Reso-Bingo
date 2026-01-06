@@ -95,28 +95,36 @@ function normalizeDomain(domain: string): string {
 }
 
 function getAuthDomain(req: any): string {
-  // In production, use the request hostname to ensure OAuth callback matches the actual domain
-  // In development, REPLIT_DEV_DOMAIN is the correct domain
+  // Get the host from various sources - prioritize X-Forwarded-Host for reverse proxy scenarios
+  const forwardedHost = req.headers?.["x-forwarded-host"];
+  const hostHeader = req.headers?.host?.split(":")[0];
+  const hostname = req.hostname;
+  
+  // In production behind a reverse proxy, X-Forwarded-Host is most reliable
+  // Otherwise fall back to hostname (set by trust proxy) or host header
   let domain: string;
   
-  const isProduction = process.env.NODE_ENV === "production";
-  const requestHost = req.hostname || req.headers?.host?.split(":")[0];
-  
-  if (isProduction && requestHost) {
-    // In production, trust the request hostname
-    domain = requestHost;
+  if (forwardedHost) {
+    // Use forwarded host (handles reverse proxy correctly)
+    domain = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost;
+  } else if (hostname && hostname !== "localhost") {
+    // Use Express hostname (requires trust proxy to be set)
+    domain = hostname;
+  } else if (hostHeader) {
+    // Fallback to host header
+    domain = hostHeader;
   } else if (process.env.REPLIT_DEV_DOMAIN) {
-    // In development, use the dev domain
+    // Development fallback
     domain = process.env.REPLIT_DEV_DOMAIN;
   } else if (process.env.REPLIT_DOMAINS) {
     domain = process.env.REPLIT_DOMAINS.split(",")[0];
   } else {
-    domain = requestHost || "localhost";
+    domain = "localhost";
   }
   
   const normalized = normalizeDomain(domain);
   
-  console.log(`[auth] Using domain: ${normalized} (production: ${isProduction}, requestHost: ${requestHost})`);
+  console.log(`[auth] Domain resolution - forwarded: ${forwardedHost}, hostname: ${hostname}, host: ${hostHeader}, using: ${normalized}`);
   
   return normalized;
 }
@@ -166,18 +174,60 @@ export async function setupAuth(app: Express) {
   app.get("/api/login", (req, res, next) => {
     const domain = getAuthDomain(req);
     ensureStrategy(domain);
-    passport.authenticate(`replitauth:${domain}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+    
+    // Store the domain in session to ensure callback uses the same domain
+    (req.session as any).authDomain = domain;
+    req.session.save((err) => {
+      if (err) {
+        console.error(`[auth] Failed to save session with domain ${domain}:`, err);
+        // Don't proceed with OAuth if we can't persist the session - it will fail anyway
+        return res.redirect(`/?auth_error=${encodeURIComponent("Unable to start sign in. Please try again.")}`);
+      }
+      
+      console.log(`[auth] Login initiated for domain ${domain}, session saved`);
+      
+      passport.authenticate(`replitauth:${domain}`, {
+        prompt: "login consent",
+        scope: ["openid", "email", "profile", "offline_access"],
+      })(req, res, next);
+    });
   });
 
   app.get("/api/callback", (req, res, next) => {
-    const domain = getAuthDomain(req);
+    // Use the domain stored during login to ensure consistency
+    const storedDomain = (req.session as any)?.authDomain;
+    const resolvedDomain = getAuthDomain(req);
+    
+    // Prefer the stored domain from login, fall back to resolved domain
+    const domain = storedDomain || resolvedDomain;
+    
+    console.log(`[auth] Callback - stored: ${storedDomain}, resolved: ${resolvedDomain}, using: ${domain}`);
+    
     ensureStrategy(domain);
-    passport.authenticate(`replitauth:${domain}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
+    
+    passport.authenticate(`replitauth:${domain}`, (err: any, user: any, info: any) => {
+      // Clear the stored auth domain after callback
+      delete (req.session as any).authDomain;
+      
+      if (err) {
+        console.error(`[auth] Callback error for domain ${domain}:`, err);
+        return res.redirect(`/?auth_error=${encodeURIComponent("Authentication failed. Please try again.")}`);
+      }
+      
+      if (!user) {
+        console.error(`[auth] No user returned for domain ${domain}. Info:`, info);
+        return res.redirect(`/?auth_error=${encodeURIComponent("Could not complete sign in. Please try again.")}`);
+      }
+      
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error(`[auth] Login error for domain ${domain}:`, loginErr);
+          return res.redirect(`/?auth_error=${encodeURIComponent("Sign in failed. Please try again.")}`);
+        }
+        
+        console.log(`[auth] Successfully authenticated user for domain ${domain}`);
+        return res.redirect("/");
+      });
     })(req, res, next);
   });
 
