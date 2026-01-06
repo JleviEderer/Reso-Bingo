@@ -120,8 +120,8 @@ export function BingoSquare({ square, index, onToggle, onEdit }: BingoSquareProp
         >
           <span
             className={cn(
-              "text-[11px] sm:text-sm font-medium leading-tight text-center",
-              "z-10 px-0.5",
+              "text-[11px] sm:text-sm font-medium leading-tight text-center break-words",
+              "z-10 px-0.5 w-full",
               square.isBoss ? "font-semibold text-amber-700 dark:text-amber-400" : "text-foreground"
             )}
           >
