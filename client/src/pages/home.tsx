@@ -171,30 +171,14 @@ export default function Home() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="py-6 px-4">
         <div className="relative">
-          <div className="absolute left-0 top-0 flex items-center gap-1">
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-1">
             {isOffline ? (
               <CloudOff className="w-4 h-4 text-muted-foreground" />
             ) : (
               <Cloud className="w-4 h-4 text-green-500" />
             )}
           </div>
-          <div className="absolute right-0 top-0 flex items-center gap-1">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" data-testid="button-settings">
-                <Settings className="w-5 h-5" />
-              </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => logout()}
-              disabled={isLoggingOut}
-              data-testid="button-logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
-          <div className="text-center pt-1">
+          <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center justify-center gap-2">
               <Sparkles className="w-6 h-6 text-primary" />
               ResoBingo 2026
@@ -220,15 +204,35 @@ export default function Home() {
           />
         </div>
 
-        <div className="mt-6 flex gap-2 justify-center">
+        <div className="mt-6 flex gap-3 justify-center flex-wrap">
+          <Link href="/settings">
+            <Button
+              variant="outline"
+              className="rounded-full px-5"
+              data-testid="button-settings"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </Button>
+          </Link>
           <Button
             variant="outline"
             onClick={handleResetProgress}
-            className="rounded-full px-6"
+            className="rounded-full px-5"
             data-testid="button-reset"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
-            Reset Progress
+            Reset
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => logout()}
+            disabled={isLoggingOut}
+            className="rounded-full px-5"
+            data-testid="button-logout"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Log Out
           </Button>
         </div>
       </main>
